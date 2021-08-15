@@ -5,7 +5,6 @@ pragma abicoder v2;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
 
 contract AQVSSpace is Ownable {
   using SafeMath for uint256;
@@ -26,7 +25,13 @@ contract AQVSSpace is Ownable {
   }
 
   function release() public onlyCreator {
-    Address.sendValue(payable(creator), address(this).balance);
+    (bool success, ) = payable(creator).call{ value: address(this).balance }("");
+    require(success, "failed_to_release");
+  }
+
+  function releaseTo(address to) public onlyCreator {
+    (bool success, ) = payable(to).call{ value: address(this).balance }("");
+    require(success, "failed_to_release");
   }
 
   constructor(

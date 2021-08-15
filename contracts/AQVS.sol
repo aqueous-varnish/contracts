@@ -40,6 +40,11 @@ contract AQVS is OwnableUpgradeable {
     require(success, "failed_to_release");
   }
 
+  function releaseTo(address to) public onlyOwner {
+    (bool success, ) = payable(to).call{ value: address(this).balance }("");
+    require(success, "failed_to_release");
+  }
+
   function setWeiCostPerStorageByte(
     uint256 _weiCostPerStorageByte
   ) public onlyOwner {
