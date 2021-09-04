@@ -5,28 +5,27 @@ pragma abicoder v2;
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "./AQVSSpace.sol";
+import "./AQVSSpaceV1.sol";
 
-contract AQVS is OwnableUpgradeable {
+contract AQVSController is OwnableUpgradeable {
   using SafeMath for uint256;
 
-  event DidMintSpace(uint256 spaceId, address spaceAddress);
-  event DidAccessSpace(uint256 spaceId, address spaceAddress);
-  event DidGiftSpaceAccess(uint256 spaceId, address spaceAddress);
+  event DidMintSpace(address spaceAddress);
+  event DidAccessSpace(address spaceAddress);
+  event DidGiftSpaceAccess(address spaceAddress);
 
-  string public baseURI;
-  uint256 public spaceCount;
+  string public network;
+  string public proxy;
   uint256 public weiCostPerStorageByte;
-  mapping (uint256 => address) public spacesById;
   mapping (address => address[]) public spacesByCreator;
   mapping (address => address[]) public spacesByAccessor;
 
   function init(
-    string memory _baseURI
+    string memory _network
   ) public initializer {
     OwnableUpgradeable.__Ownable_init();
-    spaceCount = 0;
-    baseURI = _baseURI;
+    network = _network;
+    proxy = string(abi.encodePacked("https://", _network, ".aqueousvarni.sh/"));
     // At an ETH price for ~$3200, a space of ~5mb will be
     // around $34 USD. Given we're paying for data transfer
     // and CDN costs for perpetuity, that feels about right.
@@ -54,7 +53,7 @@ contract AQVS is OwnableUpgradeable {
     uint256 spaceCapacityInBytes,
     uint256 accessPriceInWei,
     bool purchasable
-  ) public payable returns (uint256) {
+  ) public payable {
     require(
        msg.value >= weiCostToMintSpace(spaceCapacityInBytes),
       "bad_payment"
@@ -65,26 +64,29 @@ contract AQVS is OwnableUpgradeable {
     );
 
     address creator = _msgSender();
-    spaceCount++;
-
-    // TODO: Name & Code
-    try new AQVSSpace("foo", "FOO", spaceCount, supply, spaceCapacityInBytes, accessPriceInWei, purchasable, creator, baseURI)
-      returns (AQVSSpace aqvsSpace)
+    try new AQVSSpaceV1(
+      "Aqueous Varnish V1",
+      "AQVS-V1",
+      supply,
+      spaceCapacityInBytes,
+      accessPriceInWei,
+      purchasable,
+      creator,
+      proxy
+    )
+      returns (AQVSSpaceV1 space)
     {
-      spacesById[spaceCount] = address(aqvsSpace);
-      spaceIdsByCreator[creator].push(spaceCount);
-      emit DidMintSpace(spaceCount, address(aqvsSpace));
+      spacesByCreator[creator].push(address(space));
+      emit DidMintSpace(address(space));
     } catch {
       revert("make_space_failed");
     }
-
-    return spaceCount;
   }
 
   function accessSpace(
-    uint256 spaceId
-  ) public payable returns (bool) {
-    AQVSSpace space = AQVSSpace(spacesById[spaceId]);
+    address spaceAddress
+  ) public payable {
+    AQVSSpaceV1 space = AQVSSpaceV1(spaceAddress);
     require(space.creator() != address(0), "space_must_exist");
     require(msg.value >= space.accessPriceInWei(), "bad_payment");
     require(true == space.purchasable(), "not_purchasable");
@@ -93,20 +95,19 @@ contract AQVS is OwnableUpgradeable {
     require(space.balanceOf(buyer) == 0, "already_owns_space");
 
     space._grantAccess(buyer);
-    uint256 fee = spaceFees(spaceId);
+    uint256 fee = spaceFees(spaceAddress);
     uint256 remainder = SafeMath.sub(msg.value, fee);
     bool success = space.pay{ value: remainder }();
     require(success, "failed_to_pay_creator");
-    spaceIdsByAccessor[buyer].push(spaceId);
-    emit DidAccessSpace(spaceId, address(space));
-    return true;
+    spacesByAccessor[buyer].push(address(space));
+    emit DidAccessSpace(address(space));
   }
 
   function addSpaceCapacityInBytes(
-    uint256 spaceId,
+    address spaceAddress,
     uint256 additionalSpaceCapacityInBytes
   ) public payable returns (bool) {
-    AQVSSpace space = AQVSSpace(spacesById[spaceId]);
+    AQVSSpaceV1 space = AQVSSpaceV1(spaceAddress);
     require(space.creator() != address(0), "space_must_exist");
     require(space.creator() == _msgSender(), "only_creator");
     require(
@@ -118,17 +119,17 @@ contract AQVS is OwnableUpgradeable {
   }
 
   function giftSpaceAccess(
-    uint256 spaceId,
+    address spaceAddress,
     address giftee
   ) public returns (bool) {
-    AQVSSpace space = AQVSSpace(spacesById[spaceId]);
+    AQVSSpaceV1 space = AQVSSpaceV1(spaceAddress);
     require(space.creator() != address(0), "space_must_exist");
     require(space.creator() == _msgSender(), "only_creator");
 
     require(space.balanceOf(giftee) == 0, "already_owns_space");
     space._grantAccess(giftee);
-    spaceIdsByAccessor[giftee].push(spaceId);
-    emit DidGiftSpaceAccess(spaceId, address(space));
+    spacesByAccessor[giftee].push(address(space));
+    emit DidGiftSpaceAccess(address(space));
     return true;
   }
 
@@ -148,17 +149,17 @@ contract AQVS is OwnableUpgradeable {
   }
 
   function remainingSupply(
-    uint256 spaceId
+    address spaceAddress
   ) public view returns (uint256) {
-    AQVSSpace space = AQVSSpace(spacesById[spaceId]);
+    AQVSSpaceV1 space = AQVSSpaceV1(spaceAddress);
     require(space.creator() != address(0), "space_must_exist");
     return space.remainingSupply();
   }
 
   function spaceFees(
-    uint256 spaceId
+    address spaceAddress
   ) public view returns (uint256) {
-    AQVSSpace space = AQVSSpace(spacesById[spaceId]);
+    AQVSSpaceV1 space = AQVSSpaceV1(spaceAddress);
     require(space.creator() != address(0), "space_must_exist");
     return estimateSpaceFees(
       space.supply(),
@@ -173,15 +174,15 @@ contract AQVS is OwnableUpgradeable {
     return spaceCapacityInBytes * weiCostPerStorageByte;
   }
 
-  function spaceIdsCreatedBy(
+  function spacesCreatedBy(
     address creator
-  ) public view returns (uint256[] memory) {
-    return spaceIdsByCreator[creator];
+  ) public view returns (address[] memory) {
+    return spacesByCreator[creator];
   }
 
-  function spaceIdsOwnedBy(
-    address buyer
-  ) public view returns (uint256[] memory) {
-    return spaceIdsByAccessor[buyer];
+  function spacesOwnedBy(
+    address owner
+  ) public view returns (address[] memory) {
+    return spacesByAccessor[owner];
   }
 }

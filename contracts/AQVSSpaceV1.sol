@@ -9,17 +9,20 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "./AddressToString.sol";
 
-contract AQVSSpace is Ownable, ERC721 {
+contract AQVSSpaceV1 is Ownable, ERC721 {
   using SafeMath for uint256;
   using Strings for uint256;
   using AddressToString for address;
 
-  uint256 public id;
   uint256 public supply;
   uint256 public spaceCapacityInBytes;
   uint256 public accessPriceInWei;
   address public creator;
   bool public purchasable;
+
+  function version() public pure returns (string memory) {
+    return "V1";
+  }
 
   modifier onlyCreator() {
     require(creator == _msgSender(), "only_creator");
@@ -43,22 +46,20 @@ contract AQVSSpace is Ownable, ERC721 {
   constructor(
     string memory _name,
     string memory _symbol,
-    uint256 _id,
     uint256 _supply,
     uint256 _spaceCapacityInBytes,
     uint256 _accessPriceInWei,
     bool _purchasable,
     address _creator,
-    string memory _baseURI
+    string memory _proxy
   ) ERC721(_name, _symbol) {
-    id = _id;
     supply = _supply;
     spaceCapacityInBytes = _spaceCapacityInBytes;
     accessPriceInWei = _accessPriceInWei;
     purchasable = _purchasable;
     creator = _creator;
     _setBaseURI(
-      string(abi.encodePacked(_baseURI, address(this).toString(), "/"))
+      string(abi.encodePacked(_proxy, "space-metadata/", address(this).toString(), "/"))
     );
   }
 

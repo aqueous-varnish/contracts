@@ -6,18 +6,16 @@ chai.use(require('chai-bn')(BN));
 const { expect } = chai;
 const { toWei, fromWei, toBN } = web3.utils;
 
-const AqueousVarnish = contract.fromArtifact('AQVS');
-const AQVSSpace = contract.fromArtifact('AQVSSpace');
+const AqueousVarnish = contract.fromArtifact('AQVSController');
+const AQVSSpace = contract.fromArtifact('AQVSSpaceV1');
 const FIVE_MB = 5 * 1000 * 1000;
-
-const URI = 'https://mocha.aqueousvarni.sh/space-metadata/';
 
 describe("Aqueous Varnish", async () => {
   const [deployer, ...others] = accounts;
 
   beforeEach(async function () {
     this.contract = await AqueousVarnish.new({ from: deployer });
-    await this.contract.init(URI, { from: deployer });
+    await this.contract.init("mocha", { from: deployer });
   });
 
   it('only deployer can set AQVS#weiCostPerStorageByte', async function () {
@@ -92,8 +90,9 @@ describe("Aqueous Varnish", async () => {
       from: creator,
       value: mintingCost
     });
-    const mintEvent = tx1.logs.find(l => l.event === "DidMintSpace");
-    expect(mintEvent.args.spaceId.toString()).to.equal('1');
+    const spaceAddress = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress;
+    const spaceContract = await AQVSSpace.at(spaceAddress);
+    expect(await spaceContract.version()).to.be.equal("V1");
   });
 
   it('only creator can increase AQVSSpace#spaceCapacityInBytes with AQVS#addSpaceCapacityInBytes', async function () {
@@ -105,15 +104,12 @@ describe("Aqueous Varnish", async () => {
       from: creator,
       value: mintingCost
     });
-    const spaceId = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceId.toNumber();
-    const spaceContract = await AQVSSpace.at(
-      tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress
-    );
-
+    const spaceAddress = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress;
+    const spaceContract = await AQVSSpace.at(spaceAddress);
     expect(await spaceContract.spaceCapacityInBytes()).to.be.bignumber.equal(toBN(FIVE_MB));
 
     try {
-      await this.contract.addSpaceCapacityInBytes(spaceId, FIVE_MB, {
+      await this.contract.addSpaceCapacityInBytes(spaceAddress, FIVE_MB, {
         from: other,
         value: mintingCost
       });
@@ -121,11 +117,12 @@ describe("Aqueous Varnish", async () => {
       expect(e.reason).to.equal('only_creator');
     }
 
-    await this.contract.addSpaceCapacityInBytes(spaceId, FIVE_MB, {
+    await this.contract.addSpaceCapacityInBytes(spaceAddress, FIVE_MB, {
       from: creator,
       value: mintingCost
     });
-    expect(await spaceContract.spaceCapacityInBytes()).to.be.bignumber.equal(toBN(FIVE_MB).add(toBN(FIVE_MB)));
+    expect(await spaceContract.spaceCapacityInBytes())
+      .to.be.bignumber.equal(toBN(FIVE_MB).add(toBN(FIVE_MB)));
   });
 
   it('only the creator can set AQVSSpace#setAccessPriceInWei', async function () {
@@ -193,22 +190,21 @@ describe("Aqueous Varnish", async () => {
       from: creator,
       value: mintingCost
     });
-    const spaceId = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceId.toNumber();
     const spaceAddress = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress;
 
     try {
-      await this.contract.giftSpaceAccess(spaceId, giftee, {
+      await this.contract.giftSpaceAccess(spaceAddress, giftee, {
         from: other
       });
     } catch(e) {
       expect(e.reason).to.equal('only_creator');
     }
 
-    expect((await this.contract.remainingSupply(spaceId)).toNumber()).to.equal(1);
-    await this.contract.giftSpaceAccess(spaceId, giftee, {
+    expect((await this.contract.remainingSupply(spaceAddress)).toNumber()).to.equal(1);
+    await this.contract.giftSpaceAccess(spaceAddress, giftee, {
       from: creator
     });
-    expect((await this.contract.remainingSupply(spaceId)).toNumber()).to.equal(0);
+    expect((await this.contract.remainingSupply(spaceAddress)).toNumber()).to.equal(0);
 
     const spaceContract = await AQVSSpace.at(spaceAddress);
     const gifteeBalance = await spaceContract.balanceOf(giftee);
@@ -225,23 +221,21 @@ describe("Aqueous Varnish", async () => {
       from: creator,
       value: mintingCost
     });
-    const spaceId = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceId.toNumber();
-    const spaceContract = await AQVSSpace.at(
-      tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress
-    );
+    const spaceAddress = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress;
+    const spaceContract = await AQVSSpace.at(spaceAddress);
 
     // Other accesses the space
-    expect((await this.contract.remainingSupply(spaceId)).toNumber()).to.equal(1);
-    expect((await this.contract.spaceIdsOwnedBy(other)).length).to.equal(0);
-    const tx2 = await this.contract.accessSpace(spaceId, {
+    expect((await this.contract.remainingSupply(spaceAddress)).toNumber()).to.equal(1);
+    expect((await this.contract.spacesOwnedBy(other)).length).to.equal(0);
+    const tx2 = await this.contract.accessSpace(spaceAddress, {
       from: other,
       value: toWei('1.1', 'ether')
     });
-    expect((await this.contract.remainingSupply(spaceId)).toNumber()).to.equal(0);
-    expect((await this.contract.spaceIdsOwnedBy(other)).length).to.equal(1);
-    expect((await this.contract.spaceIdsOwnedBy(other))[0].toNumber()).to.equal(spaceId);
+    expect((await this.contract.remainingSupply(spaceAddress)).toNumber()).to.equal(0);
+    expect((await this.contract.spacesOwnedBy(other)).length).to.equal(1);
+    expect((await this.contract.spacesOwnedBy(other))[0]).to.equal(spaceAddress);
 
-    const ourFee = await this.contract.spaceFees(spaceId);
+    const ourFee = await this.contract.spaceFees(spaceAddress);
     expect(toBN(await web3.eth.getBalance(spaceContract.address)))
       .to.be.bignumber.equal(toBN(toWei('1.1', 'ether')).sub(ourFee));
     expect(toBN(await web3.eth.getBalance(this.contract.address)))
@@ -307,19 +301,17 @@ describe("Aqueous Varnish", async () => {
       from: creator,
       value: mintingCost
     });
-    const spaceId = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceId.toNumber();
-    const spaceContract = await AQVSSpace.at(
-      tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress
-    );
+    const spaceAddress = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress;
+    const spaceContract = await AQVSSpace.at(spaceAddress);
 
     // Other accesses the space
-    await this.contract.accessSpace(spaceId, {
+    await this.contract.accessSpace(spaceAddress, {
       from: other,
       value: toWei('1.1', 'ether')
     });
 
     try {
-      await this.contract.accessSpace(spaceId, {
+      await this.contract.accessSpace(spaceAddress, {
         from: other,
         value: toWei('1.1', 'ether')
       });
@@ -328,7 +320,7 @@ describe("Aqueous Varnish", async () => {
     }
 
     try {
-      await this.contract.accessSpace(spaceId, {
+      await this.contract.accessSpace(spaceAddress, {
         from: other2,
         value: toWei('1.1', 'ether')
       });
@@ -348,18 +340,16 @@ describe("Aqueous Varnish", async () => {
       from: creator,
       value: mintingCost
     });
-    const spaceId = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceId.toNumber();
-    const spaceContract = await AQVSSpace.at(
-      tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress
-    );
+    const spaceAddress = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress;
+    const spaceContract = await AQVSSpace.at(spaceAddress);
 
     // Other accesses the space
-    const tx2 = await this.contract.accessSpace(spaceId, {
+    const tx2 = await this.contract.accessSpace(spaceAddress, {
       from: other,
       value: toWei('1.1', 'ether')
     });
 
-    const ourFee = await this.contract.spaceFees(spaceId);
+    const ourFee = await this.contract.spaceFees(spaceAddress);
     expect(toBN(await web3.eth.getBalance(spaceContract.address)))
       .to.be.bignumber.equal(toBN(toWei('1.1', 'ether')).sub(ourFee));
     expect(toBN(await web3.eth.getBalance(this.contract.address)))
@@ -407,18 +397,16 @@ describe("Aqueous Varnish", async () => {
       from: creator,
       value: mintingCost
     });
-    const spaceId = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceId.toNumber();
-    const spaceContract = await AQVSSpace.at(
-      tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress
-    );
+    const spaceAddress = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress;
+    const spaceContract = await AQVSSpace.at(spaceAddress);
 
     // Other accesses the space
-    const tx2 = await this.contract.accessSpace(spaceId, {
+    const tx2 = await this.contract.accessSpace(spaceAddress, {
       from: other,
       value: toWei('1.1', 'ether')
     });
 
-    const ourFee = await this.contract.spaceFees(spaceId);
+    const ourFee = await this.contract.spaceFees(spaceAddress);
     expect(toBN(await web3.eth.getBalance(spaceContract.address)))
       .to.be.bignumber.equal(toBN(toWei('1.1', 'ether')).sub(ourFee));
     expect(toBN(await web3.eth.getBalance(this.contract.address)))
@@ -480,13 +468,8 @@ describe("Aqueous Varnish", async () => {
       from: creator,
       value: mintingCost
     });
-
-    const mintEvent = tx1.logs.find(l => l.event === "DidMintSpace");
-    const spaceId = mintEvent.args.spaceId.toNumber();
-    expect(spaceId).to.equal(1);
-    const spaceContract = await AQVSSpace.at(
-      mintEvent.args.spaceAddress
-    );
+    const spaceAddress = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress;
+    const spaceContract = await AQVSSpace.at(spaceAddress);
 
     try {
       await spaceContract.tokenURI(1);
@@ -495,14 +478,23 @@ describe("Aqueous Varnish", async () => {
         .to.equal('Returned error: VM Exception while processing transaction: revert ERC721Metadata: URI query for nonexistent token');
     }
 
-    const tx2 = await this.contract.accessSpace(spaceId, {
+    try {
+      await spaceContract.tokenOfOwnerByIndex(other, 0);
+    } catch(e) {
+      expect(e.message)
+        .to.equal('Returned error: VM Exception while processing transaction: revert EnumerableSet: index out of bounds');
+    }
+
+    const tx2 = await this.contract.accessSpace(spaceAddress, {
       from: other,
       value: toWei('1.1', 'ether')
     });
 
-      const uri = await spaceContract.tokenURI(1);
-
-    console.log(uri);
-    expect("").to.be.equal("foo");
+    const tokenId = (await spaceContract.tokenOfOwnerByIndex(other, 0)).toNumber();
+    const uri = await spaceContract.tokenURI(tokenId);
+    expect(uri)
+      .to.be.equal(
+        `https://mocha.aqueousvarni.sh/space-metadata/${spaceAddress.toLowerCase()}/${tokenId}`
+      );
   });
 });
