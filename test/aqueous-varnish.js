@@ -6,12 +6,11 @@ chai.use(require('chai-bn')(BN));
 const { expect } = chai;
 const { toWei, fromWei, toBN } = web3.utils;
 
-const AQVSTokens = contract.fromArtifact('AQVSTokens');
 const AqueousVarnish = contract.fromArtifact('AQVS');
 const AQVSSpace = contract.fromArtifact('AQVSSpace');
 const FIVE_MB = 5 * 1000 * 1000;
 
-const URI = 'https://mocha.aqueousvarni.sh/space-metadata/{id}';
+const URI = 'https://mocha.aqueousvarni.sh/space-metadata/';
 
 describe("Aqueous Varnish", async () => {
   const [deployer, ...others] = accounts;
@@ -195,6 +194,7 @@ describe("Aqueous Varnish", async () => {
       value: mintingCost
     });
     const spaceId = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceId.toNumber();
+    const spaceAddress = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress;
 
     try {
       await this.contract.giftSpaceAccess(spaceId, giftee, {
@@ -210,12 +210,12 @@ describe("Aqueous Varnish", async () => {
     });
     expect((await this.contract.remainingSupply(spaceId)).toNumber()).to.equal(0);
 
-    const tokenContract = await AQVSTokens.at(await this.contract.tokens());
-    const gifteeBalance = await tokenContract.balanceOf(giftee, spaceId);
+    const spaceContract = await AQVSSpace.at(spaceAddress);
+    const gifteeBalance = await spaceContract.balanceOf(giftee);
     expect(gifteeBalance.toNumber()).to.equal(1);
   });
 
-  it('E2E - only creator can use AQVSSpace#release', async function () {
+  it('End to End - only creator can use AQVSSpace#release', async function () {
     const creator = others[0];
     const other = others[1];
 
@@ -244,6 +244,8 @@ describe("Aqueous Varnish", async () => {
     const ourFee = await this.contract.spaceFees(spaceId);
     expect(toBN(await web3.eth.getBalance(spaceContract.address)))
       .to.be.bignumber.equal(toBN(toWei('1.1', 'ether')).sub(ourFee));
+    expect(toBN(await web3.eth.getBalance(this.contract.address)))
+      .to.be.bignumber.equal(mintingCost.add(ourFee));
 
     try {
       await spaceContract.release({
@@ -294,21 +296,213 @@ describe("Aqueous Varnish", async () => {
     }
   });
 
-  it("the deployer gets paid a transaction fee when space access is bought", async function () {
-    throw "TODO";
+  it("a buyer can not buy access to a space twice, or a sold-out space", async function () {
+    const creator = others[0];
+    const other = others[1];
+    const other2 = others[2];
+
+    // Mint Space
+    const mintingCost = await this.contract.weiCostToMintSpace(FIVE_MB);
+    const tx1 = await this.contract.mintSpace(1, FIVE_MB, toWei('1.1', 'ether'), true, {
+      from: creator,
+      value: mintingCost
+    });
+    const spaceId = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceId.toNumber();
+    const spaceContract = await AQVSSpace.at(
+      tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress
+    );
+
+    // Other accesses the space
+    await this.contract.accessSpace(spaceId, {
+      from: other,
+      value: toWei('1.1', 'ether')
+    });
+
+    try {
+      await this.contract.accessSpace(spaceId, {
+        from: other,
+        value: toWei('1.1', 'ether')
+      });
+    } catch(e) {
+      expect(e.reason).to.equal('already_owns_space');
+    }
+
+    try {
+      await this.contract.accessSpace(spaceId, {
+        from: other2,
+        value: toWei('1.1', 'ether')
+      });
+    } catch(e) {
+      expect(e.reason).to.equal('sold_out');
+    }
   });
 
-  it("a buyer can not buy access to a sold-out space", async function () {
-    throw "TODO";
+  it("only deployer can release system fees to a specific address", async function () {
+    const creator = others[0];
+    const other = others[1];
+    const receiver = others[2];
+
+    // Mint Space
+    const mintingCost = await this.contract.weiCostToMintSpace(FIVE_MB);
+    const tx1 = await this.contract.mintSpace(1, FIVE_MB, toWei('1.1', 'ether'), true, {
+      from: creator,
+      value: mintingCost
+    });
+    const spaceId = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceId.toNumber();
+    const spaceContract = await AQVSSpace.at(
+      tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress
+    );
+
+    // Other accesses the space
+    const tx2 = await this.contract.accessSpace(spaceId, {
+      from: other,
+      value: toWei('1.1', 'ether')
+    });
+
+    const ourFee = await this.contract.spaceFees(spaceId);
+    expect(toBN(await web3.eth.getBalance(spaceContract.address)))
+      .to.be.bignumber.equal(toBN(toWei('1.1', 'ether')).sub(ourFee));
+    expect(toBN(await web3.eth.getBalance(this.contract.address)))
+      .to.be.bignumber.equal(mintingCost.add(ourFee));
+
+    try {
+      await this.contract.releaseTo(receiver, {
+        from: creator
+      });
+    } catch(e) {
+      expect(e.reason).to.equal('Ownable: caller is not the owner');
+    }
+
+    const receiverInitialBalance = toBN(await web3.eth.getBalance(receiver));
+    const tx3 = await this.contract.releaseTo(receiver, {
+      from: deployer
+    });
+    expect(toBN(await web3.eth.getBalance(this.contract.address))).to.be.bignumber.equal(toBN(0));
+    const receiverAfterBalance = toBN(await web3.eth.getBalance(receiver));
+    expect(receiverAfterBalance)
+      .to.be.bignumber.equal(receiverInitialBalance.add(mintingCost).add(ourFee));
   });
 
-  it("a buyer can not buy access to a space twice", async function () {
-    throw "TODO";
+  it("a creator can not mint a space without at least 1 supply", async function () {
+    const creator = others[0];
+    const mintingCost = await this.contract.weiCostToMintSpace(FIVE_MB);
+    try {
+      await this.contract.mintSpace(0, FIVE_MB, toWei('1.1', 'ether'), false, {
+        from: creator,
+        value: mintingCost
+      });
+    } catch(e) {
+      expect(e.reason).to.be.equal('supply_too_low');
+    }
+  });
+
+  it("only creator can release space fees to a specific address", async function () {
+    const creator = others[0];
+    const other = others[1];
+    const receiver = others[2];
+
+    // Mint Space
+    const mintingCost = await this.contract.weiCostToMintSpace(FIVE_MB);
+    const tx1 = await this.contract.mintSpace(1, FIVE_MB, toWei('1.1', 'ether'), true, {
+      from: creator,
+      value: mintingCost
+    });
+    const spaceId = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceId.toNumber();
+    const spaceContract = await AQVSSpace.at(
+      tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress
+    );
+
+    // Other accesses the space
+    const tx2 = await this.contract.accessSpace(spaceId, {
+      from: other,
+      value: toWei('1.1', 'ether')
+    });
+
+    const ourFee = await this.contract.spaceFees(spaceId);
+    expect(toBN(await web3.eth.getBalance(spaceContract.address)))
+      .to.be.bignumber.equal(toBN(toWei('1.1', 'ether')).sub(ourFee));
+    expect(toBN(await web3.eth.getBalance(this.contract.address)))
+      .to.be.bignumber.equal(mintingCost.add(ourFee));
+
+    try {
+      await spaceContract.releaseTo(receiver, {
+        from: other
+      });
+    } catch(e) {
+      expect(e.reason).to.equal('only_creator');
+    }
+
+    const receiverInitialBalance = toBN(await web3.eth.getBalance(receiver));
+    const tx3 = await spaceContract.releaseTo(receiver, {
+      from: creator
+    });
+    expect(toBN(await web3.eth.getBalance(spaceContract.address))).to.be.bignumber.equal(toBN(0));
+    const receiverAfterBalance = toBN(await web3.eth.getBalance(receiver));
+
+    expect(receiverAfterBalance)
+      .to.be.bignumber.equal(receiverInitialBalance.add(
+        toBN(toWei('1.1', 'ether')).sub(ourFee)
+      ));
+  });
+
+  it("a creator can not mint a space without at least 1 supply", async function () {
+    const creator = others[0];
+    const mintingCost = await this.contract.weiCostToMintSpace(FIVE_MB);
+    try {
+      await this.contract.mintSpace(0, FIVE_MB, toWei('1.1', 'ether'), false, {
+        from: creator,
+        value: mintingCost
+      });
+    } catch(e) {
+      expect(e.reason).to.be.equal('supply_too_low');
+    }
+  });
+
+  it("a creator can not mint a space without sending the correct ETH", async function () {
+    const creator = others[0];
+    try {
+      await this.contract.mintSpace(1, FIVE_MB, toWei('1.1', 'ether'), false, {
+        from: creator,
+        value: 0
+      });
+    } catch(e) {
+      expect(e.reason).to.be.equal('bad_payment');
+    }
   });
 
   it("Can build a URI for the token", async function () {
-    const tokens = await AQVSTokens.at(await this.contract.tokens());
-    const uri = await tokens.uri(1);
-    expect(uri).to.be.equal(URI);
+    const creator = others[0];
+    const other = others[1];
+
+    // Mint Space
+    const mintingCost = await this.contract.weiCostToMintSpace(FIVE_MB);
+    const tx1 = await this.contract.mintSpace(1, FIVE_MB, toWei('1.1', 'ether'), true, {
+      from: creator,
+      value: mintingCost
+    });
+
+    const mintEvent = tx1.logs.find(l => l.event === "DidMintSpace");
+    const spaceId = mintEvent.args.spaceId.toNumber();
+    expect(spaceId).to.equal(1);
+    const spaceContract = await AQVSSpace.at(
+      mintEvent.args.spaceAddress
+    );
+
+    try {
+      await spaceContract.tokenURI(1);
+    } catch(e) {
+      expect(e.message)
+        .to.equal('Returned error: VM Exception while processing transaction: revert ERC721Metadata: URI query for nonexistent token');
+    }
+
+    const tx2 = await this.contract.accessSpace(spaceId, {
+      from: other,
+      value: toWei('1.1', 'ether')
+    });
+
+      const uri = await spaceContract.tokenURI(1);
+
+    console.log(uri);
+    expect("").to.be.equal("foo");
   });
 });

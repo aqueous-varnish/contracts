@@ -5,8 +5,6 @@ pragma abicoder v2;
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
-
-import "./AQVSTokens.sol";
 import "./AQVSSpace.sol";
 
 contract AQVS is OwnableUpgradeable {
@@ -16,19 +14,19 @@ contract AQVS is OwnableUpgradeable {
   event DidAccessSpace(uint256 spaceId, address spaceAddress);
   event DidGiftSpaceAccess(uint256 spaceId, address spaceAddress);
 
-  AQVSTokens public tokens;
+  string public baseURI;
   uint256 public spaceCount;
   uint256 public weiCostPerStorageByte;
   mapping (uint256 => address) public spacesById;
-  mapping (address => uint256[]) public spaceIdsByCreator;
-  mapping (address => uint256[]) public spaceIdsByAccessor;
+  mapping (address => address[]) public spacesByCreator;
+  mapping (address => address[]) public spacesByAccessor;
 
   function init(
-    string memory uri
+    string memory _baseURI
   ) public initializer {
     OwnableUpgradeable.__Ownable_init();
-    tokens = new AQVSTokens(uri);
     spaceCount = 0;
+    baseURI = _baseURI;
     // At an ETH price for ~$3200, a space of ~5mb will be
     // around $34 USD. Given we're paying for data transfer
     // and CDN costs for perpetuity, that feels about right.
@@ -37,6 +35,11 @@ contract AQVS is OwnableUpgradeable {
 
   function release() public onlyOwner {
     (bool success, ) = payable(owner()).call{ value: address(this).balance }("");
+    require(success, "failed_to_release");
+  }
+
+  function releaseTo(address to) public onlyOwner {
+    (bool success, ) = payable(to).call{ value: address(this).balance }("");
     require(success, "failed_to_release");
   }
 
@@ -64,10 +67,10 @@ contract AQVS is OwnableUpgradeable {
     address creator = _msgSender();
     spaceCount++;
 
-    try new AQVSSpace(supply, spaceCapacityInBytes, accessPriceInWei, purchasable, creator)
+    // TODO: Name & Code
+    try new AQVSSpace("foo", "FOO", spaceCount, supply, spaceCapacityInBytes, accessPriceInWei, purchasable, creator, baseURI)
       returns (AQVSSpace aqvsSpace)
     {
-      tokens.mint(creator, spaceCount, supply);
       spacesById[spaceCount] = address(aqvsSpace);
       spaceIdsByCreator[creator].push(spaceCount);
       emit DidMintSpace(spaceCount, address(aqvsSpace));
@@ -87,12 +90,12 @@ contract AQVS is OwnableUpgradeable {
     require(true == space.purchasable(), "not_purchasable");
 
     address buyer = _msgSender();
-    require(tokens.balanceOf(buyer, spaceId) == 0, "already_owns_space");
+    require(space.balanceOf(buyer) == 0, "already_owns_space");
 
-    tokens.safeTransferFrom(space.creator(), buyer, spaceId, 1, "");
+    space._grantAccess(buyer);
     uint256 fee = spaceFees(spaceId);
     uint256 remainder = SafeMath.sub(msg.value, fee);
-    bool success = space.buy{ value: remainder }();
+    bool success = space.pay{ value: remainder }();
     require(success, "failed_to_pay_creator");
     spaceIdsByAccessor[buyer].push(spaceId);
     emit DidAccessSpace(spaceId, address(space));
@@ -121,8 +124,9 @@ contract AQVS is OwnableUpgradeable {
     AQVSSpace space = AQVSSpace(spacesById[spaceId]);
     require(space.creator() != address(0), "space_must_exist");
     require(space.creator() == _msgSender(), "only_creator");
-    require(tokens.balanceOf(giftee, spaceId) == 0, "already_owns_space");
-    tokens.safeTransferFrom(space.creator(), giftee, spaceId, 1, "");
+
+    require(space.balanceOf(giftee) == 0, "already_owns_space");
+    space._grantAccess(giftee);
     spaceIdsByAccessor[giftee].push(spaceId);
     emit DidGiftSpaceAccess(spaceId, address(space));
     return true;
@@ -148,7 +152,7 @@ contract AQVS is OwnableUpgradeable {
   ) public view returns (uint256) {
     AQVSSpace space = AQVSSpace(spacesById[spaceId]);
     require(space.creator() != address(0), "space_must_exist");
-    return tokens.balanceOf(space.creator(), spaceId);
+    return space.remainingSupply();
   }
 
   function spaceFees(
