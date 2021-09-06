@@ -26462,9 +26462,75 @@
     "name": "solc",
     "version": "0.7.6+commit.7338295f.Emscripten.clang"
   },
-  "networks": {},
+  "networks": {
+    "5777": {
+      "events": {
+        "0xda80622db97961e968f66dcdab623758cccad8bdcdb4602a50bc07f07e1299a0": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": false,
+              "internalType": "address",
+              "name": "spaceAddress",
+              "type": "address"
+            }
+          ],
+          "name": "DidAccessSpace",
+          "type": "event"
+        },
+        "0x0d5a31972720f7e8a358a07c41fcef7400d2994b0b48faa2f0a9d3935c19ac09": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": false,
+              "internalType": "address",
+              "name": "spaceAddress",
+              "type": "address"
+            }
+          ],
+          "name": "DidGiftSpaceAccess",
+          "type": "event"
+        },
+        "0x361716384e44906ccf6968060313d97fd791137ac9589eaddcc91ba29170b1fc": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": false,
+              "internalType": "address",
+              "name": "spaceAddress",
+              "type": "address"
+            }
+          ],
+          "name": "DidMintSpace",
+          "type": "event"
+        },
+        "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "previousOwner",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "newOwner",
+              "type": "address"
+            }
+          ],
+          "name": "OwnershipTransferred",
+          "type": "event"
+        }
+      },
+      "links": {},
+      "address": "0x9805B697B7241f0e0c9299717b06E0Cb01491BAf",
+      "transactionHash": "0xe92f943b1754a4222eb82abc62fd14036e0915d87614c88d07aa4d67034de129"
+    }
+  },
   "schemaVersion": "3.3.3",
-  "updatedAt": "2021-09-04T17:43:13.650Z",
+  "updatedAt": "2021-09-06T13:26:54.328Z",
   "devdoc": {
     "kind": "dev",
     "methods": {

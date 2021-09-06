@@ -1,0 +1,103 @@
+{
+  "manifestVersion": "3.1",
+  "impls": {
+    "c27e2c35c1802276914b387c7c22ea58dd0804d1db33dec46ebefa13be7acef5": {
+      "address": "0xdE55237A0664E50EaAce23239C03E6599bCFC94E",
+      "txHash": "0xe92f943b1754a4222eb82abc62fd14036e0915d87614c88d07aa4d67034de129",
+      "layout": {
+        "storage": [
+          {
+            "contract": "Initializable",
+            "label": "_initialized",
+            "type": "t_bool",
+            "src": "../@openzeppelin/contracts-upgradeable/proxy/Initializable.sol:25"
+          },
+          {
+            "contract": "Initializable",
+            "label": "_initializing",
+            "type": "t_bool",
+            "src": "../@openzeppelin/contracts-upgradeable/proxy/Initializable.sol:30"
+          },
+          {
+            "contract": "ContextUpgradeable",
+            "label": "__gap",
+            "type": "t_array(t_uint256)50_storage",
+            "src": "../@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol:31"
+          },
+          {
+            "contract": "OwnableUpgradeable",
+            "label": "_owner",
+            "type": "t_address",
+            "src": "../@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:20"
+          },
+          {
+            "contract": "OwnableUpgradeable",
+            "label": "__gap",
+            "type": "t_array(t_uint256)49_storage",
+            "src": "../@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:74"
+          },
+          {
+            "contract": "AQVSController",
+            "label": "network",
+            "type": "t_string_storage",
+            "src": "AQVSController.sol:17"
+          },
+          {
+            "contract": "AQVSController",
+            "label": "proxy",
+            "type": "t_string_storage",
+            "src": "AQVSController.sol:18"
+          },
+          {
+            "contract": "AQVSController",
+            "label": "weiCostPerStorageByte",
+            "type": "t_uint256",
+            "src": "AQVSController.sol:19"
+          },
+          {
+            "contract": "AQVSController",
+            "label": "spacesByCreator",
+            "type": "t_mapping(t_address,t_array(t_address)dyn_storage)",
+            "src": "AQVSController.sol:20"
+          },
+          {
+            "contract": "AQVSController",
+            "label": "spacesByAccessor",
+            "type": "t_mapping(t_address,t_array(t_address)dyn_storage)",
+            "src": "AQVSController.sol:21"
+          }
+        ],
+        "types": {
+          "t_string_storage": {
+            "label": "string"
+          },
+          "t_uint256": {
+            "label": "uint256"
+          },
+          "t_mapping(t_address,t_array(t_address)dyn_storage)": {
+            "label": "mapping(address => address[])"
+          },
+          "t_address": {
+            "label": "address"
+          },
+          "t_array(t_address)dyn_storage": {
+            "label": "address[]"
+          },
+          "t_array(t_uint256)49_storage": {
+            "label": "uint256[49]"
+          },
+          "t_array(t_uint256)50_storage": {
+            "label": "uint256[50]"
+          },
+          "t_bool": {
+            "label": "bool"
+          }
+        }
+      }
+    }
+  },
+  "admin": {
+    "address": "0xdADdEe05bbf25304A65DfBE7CBdd9F989f032D65",
+    "txHash": "0xcfe74babf3a24dc22ee6b5ecc10b23be6392de3dc2e6832ab65c1e83c06ca679"
+  }
+}
