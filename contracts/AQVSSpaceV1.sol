@@ -51,7 +51,7 @@ contract AQVSSpaceV1 is Ownable, ERC721 {
     uint256 _accessPriceInWei,
     bool _purchasable,
     address _creator,
-    string memory _proxy
+    string memory _gateway
   ) ERC721(_name, _symbol) {
     supply = _supply;
     spaceCapacityInBytes = _spaceCapacityInBytes;
@@ -59,7 +59,7 @@ contract AQVSSpaceV1 is Ownable, ERC721 {
     purchasable = _purchasable;
     creator = _creator;
     _setBaseURI(
-      string(abi.encodePacked(_proxy, "space-metadata/", address(this).toString(), "/"))
+      string(abi.encodePacked(_gateway, "space-metadata/", address(this).toString(), "/"))
     );
   }
 

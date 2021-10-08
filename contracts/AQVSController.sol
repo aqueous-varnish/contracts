@@ -12,11 +12,14 @@ contract AQVSController is OwnableUpgradeable {
 
   event DidMintSpace(address spaceAddress);
   event DidAccessSpace(address spaceAddress);
-  event DidGiftSpaceAccess(address spaceAddress);
+  event DidGiftSpaceAccess(address spaceAddress, address gifteeAddress);
 
   string public network;
-  string public proxy;
+  string public gateway;
   uint256 public weiCostPerStorageByte;
+
+  uint256 public spaceIndex;
+  mapping (uint256 => address) public spacesByIndex;
   mapping (address => address[]) public spacesByCreator;
   mapping (address => address[]) public spacesByAccessor;
 
@@ -24,8 +27,9 @@ contract AQVSController is OwnableUpgradeable {
     string memory _network
   ) public initializer {
     OwnableUpgradeable.__Ownable_init();
+    spaceIndex = 0;
     network = _network;
-    proxy = string(abi.encodePacked("https://", _network, ".aqueousvarni.sh/"));
+    gateway = string(abi.encodePacked("https://", _network, ".aqueousvarni.sh/"));
     // At an ETH price for ~$3200, a space of ~5mb will be
     // around $34 USD. Given we're paying for data transfer
     // and CDN costs for perpetuity, that feels about right.
@@ -58,10 +62,10 @@ contract AQVSController is OwnableUpgradeable {
        msg.value >= weiCostToMintSpace(spaceCapacityInBytes),
       "bad_payment"
     );
-    require(
-      accessPriceInWei >= estimateSpaceFees(supply, spaceCapacityInBytes, accessPriceInWei),
-      "price_too_low"
-    );
+    require(supply > 0, "supply_too_low");
+    require(supply < 1000000, "supply_too_high");
+    require(spaceCapacityInBytes > 255999, "space_too_small");
+    require(spaceCapacityInBytes < 100000000001, "space_too_big");
 
     address creator = _msgSender();
     try new AQVSSpaceV1(
@@ -72,11 +76,13 @@ contract AQVSController is OwnableUpgradeable {
       accessPriceInWei,
       purchasable,
       creator,
-      proxy
+      gateway
     )
       returns (AQVSSpaceV1 space)
     {
+      spaceIndex += 1;
       spacesByCreator[creator].push(address(space));
+      spacesByIndex[spaceIndex] = address(space);
       emit DidMintSpace(address(space));
     } catch {
       revert("make_space_failed");
@@ -129,23 +135,23 @@ contract AQVSController is OwnableUpgradeable {
     require(space.balanceOf(giftee) == 0, "already_owns_space");
     space._grantAccess(giftee);
     spacesByAccessor[giftee].push(address(space));
-    emit DidGiftSpaceAccess(address(space));
+    emit DidGiftSpaceAccess(address(space), giftee);
     return true;
   }
 
   /* Views */
   function estimateSpaceFees(
-    uint256 supply,
-    uint256 spaceCapacityInBytes,
     uint256 accessPriceInWei
+  ) public pure returns (uint256) {
+    return SafeMath.div(accessPriceInWei, 100);
+  }
+
+  function spaceFees(
+    address spaceAddress
   ) public view returns (uint256) {
-    require(supply > 0, "supply_too_low");
-    require(supply < 1000000, "supply_too_high");
-    require(spaceCapacityInBytes > 255999, "space_too_small");
-    require(spaceCapacityInBytes < 100000000001, "space_too_big");
-    return (
-      spaceCapacityInBytes * weiCostPerStorageByte
-    ) + SafeMath.div(accessPriceInWei, 100);
+    AQVSSpaceV1 space = AQVSSpaceV1(spaceAddress);
+    require(space.creator() != address(0), "space_must_exist");
+    return estimateSpaceFees(space.accessPriceInWei());
   }
 
   function remainingSupply(
@@ -154,18 +160,6 @@ contract AQVSController is OwnableUpgradeable {
     AQVSSpaceV1 space = AQVSSpaceV1(spaceAddress);
     require(space.creator() != address(0), "space_must_exist");
     return space.remainingSupply();
-  }
-
-  function spaceFees(
-    address spaceAddress
-  ) public view returns (uint256) {
-    AQVSSpaceV1 space = AQVSSpaceV1(spaceAddress);
-    require(space.creator() != address(0), "space_must_exist");
-    return estimateSpaceFees(
-      space.supply(),
-      space.spaceCapacityInBytes(),
-      space.accessPriceInWei()
-    );
   }
 
   function weiCostToMintSpace(
@@ -184,5 +178,11 @@ contract AQVSController is OwnableUpgradeable {
     address owner
   ) public view returns (address[] memory) {
     return spacesByAccessor[owner];
+  }
+
+  function spaceAtIndex(
+    uint256 _spaceIndex
+  ) public view returns (address) {
+    return spacesByIndex[_spaceIndex];
   }
 }

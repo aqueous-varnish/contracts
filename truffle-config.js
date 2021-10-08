@@ -17,6 +17,16 @@ module.exports = {
         );
       },
       network_id: 3,
+      gas: 8000000
+    },
+    rinkeby: {
+      provider: function() {
+        return new HDWalletProvider(
+          process.env.MNEMONIC,
+          `https://rinkeby.infura.io/v3/${process.env.INFURA_API_KEY}`
+        );
+      },
+      network_id: 4,
       gas: 4000000      //make sure this gas allocation isn't over 4M, which is the max
     }
     // Another network with more advanced options...
