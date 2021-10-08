@@ -86,11 +86,14 @@ describe("Aqueous Varnish", async () => {
     // TODO: Ensure this scales with supply?
     const creator = others[0];
     const mintingCost = await this.contract.weiCostToMintSpace(FIVE_MB);
+    expect((await this.contract.spaceIndex()).toString()).to.be.equal("0");
     const tx1 = await this.contract.mintSpace(1, FIVE_MB, toWei('1.1', 'ether'), false, {
       from: creator,
       value: mintingCost
     });
+    expect((await this.contract.spaceIndex()).toString()).to.be.equal("1");
     const spaceAddress = tx1.logs.find(l => l.event === "DidMintSpace").args.spaceAddress;
+    expect(await this.contract.spaceAtIndex(1)).to.be.equal(spaceAddress);
     const spaceContract = await AQVSSpace.at(spaceAddress);
     expect(await spaceContract.version()).to.be.equal("V1");
   });
